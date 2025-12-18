@@ -59,29 +59,21 @@ if [[ -z "$DOMAIN" ]]; then
     exit 1
 fi
 
-# Запрос email для Certbot
-read -p "Введите email для Certbot (для уведомлений): " EMAIL
-if [[ -z "$EMAIL" ]]; then
-    print_error "Email не может быть пустым"
-    exit 1
-fi
-
 # Подтверждение
 echo ""
 print_message "Будет выполнена настройка для домена: $DOMAIN"
-print_message "Email для сертификата: $EMAIL"
 read -p "Продолжить? (y/n): " confirm
 if [[ "$confirm" != "y" ]]; then
     print_message "Установка отменена"
     exit 0
 fi
 
-# Установка Nginx и Certbot
+# Установка Nginx
 print_message "Обновление списка пакетов..."
 apt update
 
-print_message "Установка Nginx и Certbot..."
-apt install -y nginx certbot python3-certbot-nginx
+print_message "Установка Nginx..."
+apt install -y nginx
 
 # Удаление default конфигурации
 print_message "Удаление стандартной конфигурации..."
@@ -229,42 +221,8 @@ EOF
 
 print_message "HTML заглушка создана"
 
-# Создание начальной конфигурации Nginx для получения сертификата
-print_message "Создание конфигурации Nginx..."
-cat > /etc/nginx/sites-available/sni.conf << EOF
-server {
-    listen 80;
-    server_name $DOMAIN;
-
-    if (\$host = $DOMAIN) {
-        return 301 https://\$host\$request_uri;
-    } 
-
-    return 404;
-}
-EOF
-
-# Включение сайта
-print_message "Активация конфигурации..."
-ln -sf /etc/nginx/sites-available/sni.conf /etc/nginx/sites-enabled/
-
-# Проверка конфигурации Nginx
-print_message "Проверка конфигурации Nginx..."
-nginx -t
-
-# Перезагрузка Nginx
-print_message "Перезагрузка Nginx..."
-systemctl restart nginx
-
-# Получение SSL сертификата
-print_message "Получение SSL сертификата через Certbot..."
-print_warning "Убедитесь, что домен $DOMAIN указывает на IP этого сервера!"
-sleep 3
-
-certbot --nginx -d $DOMAIN --non-interactive --agree-tos --email $EMAIL --redirect
-
-# Обновление конфигурации для Reality
-print_message "Обновление конфигурации для Reality (порт 8443 с proxy_protocol)..."
+# Создание конфигурации для Reality
+print_message "Создание конфигурации Nginx для Reality (порт 8443 с proxy_protocol)..."
 cat > /etc/nginx/sites-available/sni.conf << EOF
 server {
     listen 127.0.0.1:8443 ssl http2 proxy_protocol;
@@ -319,10 +277,10 @@ echo ""
 print_message "Файлы:"
 echo "  Конфигурация: /etc/nginx/sites-available/sni.conf"
 echo "  HTML заглушка: /var/www/html/site/index.html"
-echo "  SSL сертификат: /etc/letsencrypt/live/$DOMAIN/"
+echo "  SSL сертификаты: /etc/letsencrypt/live/$DOMAIN/"
 echo ""
 print_message "Сайт доступен локально по адресу: 127.0.0.1:8443"
-print_message "SSL сертификат будет автоматически обновляться через Certbot"
 echo ""
-print_warning "Не забудьте оставить порт 80 открытым для автообновления сертификата!"
+print_warning "ВАЖНО: Получите SSL сертификат для домена $DOMAIN и поместите его в /etc/letsencrypt/live/$DOMAIN/"
+print_warning "Необходимые файлы: fullchain.pem и privkey.pem"
 echo ""
